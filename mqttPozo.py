@@ -1,12 +1,15 @@
 """
 Defines the functions needed for 'Pozo' to communicate with 1000 mqtt Broker
 """
+import threading
 
 __author__ = 'Cesar'
 
 
 import mosquitto
 import config
+import time
+import g4Serial
 
 # Create Mosquitto Client object
 mqttc = mosquitto.Mosquitto("mqttPozo")
@@ -21,27 +24,16 @@ def on_connect(mosq, obj, rc):
 
 def on_message(mosq, obj, msg):
     m = msg.topic.split('/')
-    # Topic structure: /Tanque_Name/{Flotador}/{Status}
-    # Flotador = 'Flotador_Alto' of 'Flotador_Bajo'
-    # Status = 'Up' or 'Down'
-    if m[1] is 'Flotador_Alto':
-        if m[2] is 'Up':
-            config.logging.debug("--> Flotador Alto --> Up")
-            # Insert code here to handle the event of Flotador_Alto = Up
-            return
-        elif m[2] is 'Down':
-            config.logging.debug("--> Flotador Alto --> Down")
-            # Insert code here to handle the event of Flotador_Alto = Down
-            return
-    if m[1] is 'Flotador_Bajo':
-        if m[2] is 'Up':
-            config.logging.debug("--> Flotador Bajo --> Up")
-            # Insert code here to handle the event of Flotador_Bajo = Up
-            return
-        elif m[2] is 'Down':
-            config.logging.debug("--> Flotador Bajo --> Down")
-            # Insert code here to handle the event of Flotador_Bajo = Down
-            return
+    # Topic structure: /Pozo_Name/{State}
+    # State = 'On' or 'Off'
+    if m[1] is 'On':
+        config.logging.debug("--> {0} --> On".format(config.Pozo_Name))
+        # TODO Insert code here to handle the event of Pozo_Name = On
+        return
+    elif m[1] is 'Off':
+        config.logging.debug("--> {0} --> Off".format(config.Pozo_Name))
+        # TODO Insert code here to handle the event of Pozo_Name = Off
+        return
     return
 
 
@@ -57,7 +49,28 @@ def on_log(mosq, obj, level, string):
     config.logging.debug(string)
 
 
+# Daemons
+def publishDaemon():
+    time.sleep(config.publishDelay)
+    try:
+        wellStatus = g4Serial.getED1()
+        if wellStatus is '1':
+            # TODO Determine what 1 means (On or Off)
+            to_publish = 'On'
+        elif wellStatus is '0':
+            # TODO Determine what 0 means (On or Off)
+            to_publish = 'Off'
+    except ValueError as e:
+        config.logging.error('Pozo Publish - Serial communications failure - {0}'.format(e.message))
+    else:
+        config.logging.debug("Publishing Pozo data to MQTT Broker")
+        mqttc.publish('{0}/{1}'.format(config.Pozo_Name, to_publish))
+
+
 def mqttPozoDaemon():
+
+    config.logging.info("Pozo Thread Running ...")
+
     # Assign event callbacks
     mqttc.on_message = on_message
     mqttc.on_connect = on_connect
@@ -67,4 +80,12 @@ def mqttPozoDaemon():
     # Connect
     mqttc.connect(config.IP_Tanque, 1883)
 
-    mqttc.loop_forever()
+    # Network loop
+    NL = threading.Thread(target=mqttc.loop_forever)
+    NL.daemon = True
+    NL.start()
+
+    # Publish loop
+    publish = threading.Thread(target=publishDaemon)
+    publish.daemon = True
+    publish.start()

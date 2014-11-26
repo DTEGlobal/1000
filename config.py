@@ -16,6 +16,8 @@ Device_Type = 'Tanque'
 # Device Name - User configurable installation name (no spaces)
 Device_Name = 'Tanque_X'
 
+# Delay between data publications
+publishDelay = 1
 
 # Information for 'Tanque'
 IP_Tanque = '192.168.1.1'

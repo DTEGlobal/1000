@@ -8,6 +8,12 @@ import threading
 import mqttPozo
 import mqttTanque
 import config
+import g4Serial
+
+# Start Serial Coms Daemon
+SendCommand = threading.Thread(target=g4Serial.SendCommand)
+SendCommand.daemon = True
+SendCommand.start()
 
 if config.Device_Type is 'Tanque':
     mqttTanqueDaemon = threading.Thread(target=mqttTanque.mqttTanqueDaemon)
